@@ -4,13 +4,13 @@
 #include <d3d11.h>
 #include <tchar.h>
 
-struct {
+struct App {
   ID3D11Device *device = nullptr;
   ID3D11DeviceContext *context = nullptr;
   IDXGISwapChain *swapChain = nullptr;
   ID3D11RenderTargetView *targetView = nullptr;
 
-  void CreateRenderTarget()
+  void create_render_target()
   {
     ID3D11Texture2D* pBackBuffer;
     swapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
@@ -19,7 +19,7 @@ struct {
   }
 
   // Forward declarations of helper functions
-  bool CreateDeviceD3D(HWND hWnd)
+  bool create_device(HWND hWnd)
   {
     // Setup swap chain
     DXGI_SWAP_CHAIN_DESC sd;
@@ -45,11 +45,11 @@ struct {
     if (D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &swapChain, &device, &featureLevel, &context) != S_OK)
       return false;
 
-    CreateRenderTarget();
+    create_render_target();
     return true;
   }
 
-  void CleanupRenderTarget()
+  void cleanup_render_target()
   {
     if (targetView) {
       targetView->Release();
@@ -57,90 +57,78 @@ struct {
     }
   }
 
-  void CleanupDeviceD3D()
+  void cleanup_device()
   {
-    CleanupRenderTarget();
+    cleanup_render_target();
     if (swapChain) { swapChain->Release(); swapChain = NULL; }
     if (context) { context->Release(); context = NULL; }
     if (device) { device->Release(); device = NULL; }
   }
-} app;
-
-
-
-
-
-
-
+};
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+struct Window {
+  App &app;
+  HWND hwnd;
+  WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, _T("wc.sway"), NULL };
 
-struct ACCENTPOLICY
-{
+  struct ACCENTPOLICY
+  {
     int nAccentState;
     int nFlags;
     int nColor;
     int nAnimationId;
-};
-struct WINCOMPATTRDATA
-{
+  };
+  struct WINCOMPATTRDATA
+  {
     int nAttribute;
     PVOID pData;
     ULONG ulDataSize;
-};
+  };
 
-typedef BOOL(WINAPI* pSetWindowCompositionAttribute)(HWND, WINCOMPATTRDATA*);
-const HINSTANCE hModule_User32 = LoadLibraryA("user32.dll");
-const pSetWindowCompositionAttribute SetWindowCompositionAttribute = (pSetWindowCompositionAttribute)GetProcAddress(hModule_User32, "SetWindowCompositionAttribute");
+  typedef BOOL(WINAPI* pSetWindowCompositionAttribute)(HWND, WINCOMPATTRDATA*);
+  const HINSTANCE hModule_User32 = LoadLibraryA("user32.dll");
+  const pSetWindowCompositionAttribute SetWindowCompositionAttribute = (pSetWindowCompositionAttribute)GetProcAddress(hModule_User32, "SetWindowCompositionAttribute");
 
-void StartAero(HWND hwnd, int type, COLORREF color, bool blend)
-{
+  void StartAero(HWND hwnd, int type, COLORREF color, bool blend)
+  {
     if (SetWindowCompositionAttribute)
     {
-        ACCENTPOLICY policy = { type == 0 ? 3 : 4, 0, 0, 0 };
-        if (blend)
-        {
-            policy.nFlags = 3;
-            policy.nColor = color;
-        }
-        else if (type == 1)
-        {
-            policy.nFlags = 1;
-            policy.nColor = 0x10000000;
-        }
-        else
-        {
-            policy.nFlags = 0;
-            policy.nColor = 0;
-        }
-        WINCOMPATTRDATA data = { 19, &policy, sizeof(ACCENTPOLICY) };
-        SetWindowCompositionAttribute(hwnd, &data);
+      ACCENTPOLICY policy = { type == 0 ? 3 : 4, 0, 0, 0 };
+      if (blend)
+      {
+        policy.nFlags = 3;
+        policy.nColor = color;
+      }
+      else if (type == 1)
+      {
+        policy.nFlags = 1;
+        policy.nColor = 0x10000000;
+      }
+      else
+      {
+        policy.nFlags = 0;
+        policy.nColor = 0;
+      }
+      WINCOMPATTRDATA data = { 19, &policy, sizeof(ACCENTPOLICY) };
+      SetWindowCompositionAttribute(hwnd, &data);
     }
-}
+  }
 
-void SetWindowBlur(HWND hWnd)
-{
+  void SetWindowBlur(HWND hWnd)
+  {
     bool isBlend = false;
     StartAero(hWnd, 1, 0, isBlend);
-}
+  }
 
-// Main code
-int main(int, char**)
-{
-    // Create application window
-    WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, _T("wc.sway"), NULL };
+  void cleanup() {
+    ::UnregisterClass(wc.lpszClassName, wc.hInstance);
+  }
+
+  void create() {
     ::RegisterClassEx(&wc);
-    HWND hwnd = ::CreateWindow(wc.lpszClassName, _T("sway"), WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
+    hwnd = ::CreateWindow(wc.lpszClassName, _T("sway"), WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
 
-    // Initialize Direct3D
-    if (!app.CreateDeviceD3D(hwnd))
-    {
-        app.CleanupDeviceD3D();
-        ::UnregisterClass(wc.lpszClassName, wc.hInstance);
-        return 1;
-    }
-
-    // Show the window
     ::ShowWindow(hwnd, SW_SHOWDEFAULT);
     ::UpdateWindow(hwnd);
 
@@ -157,20 +145,42 @@ int main(int, char**)
     int yPos = screenRect.bottom - 60;
 
     SetWindowPos(hwnd, HWND_TOPMOST, screenRect.left , yPos, (screenRect.right - screenRect.left), 60, 0);
+  }
+
+  void destroy() {
+    ::DestroyWindow(hwnd);
+    ::UnregisterClass(wc.lpszClassName, wc.hInstance);
+  }
+
+  Window(App &a) : app(a) {
+    
+  }
+};
+
+App app;
+int main(int, char**)
+{
+    Window window(app);
+
+    window.create();
+
+    // Initialize Direct3D
+    if (!app.create_device(window.hwnd))
+    {
+        app.cleanup_device();
+        window.cleanup();
+        return 1;
+    }
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
-    // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsClassic();
 
     // Setup Platform/Renderer backends
-    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplWin32_Init(window.hwnd);
     ImGui_ImplDX11_Init(app.device, app.context);
 
     // Our state
@@ -251,9 +261,8 @@ int main(int, char**)
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    app.CleanupDeviceD3D();
-    ::DestroyWindow(hwnd);
-    ::UnregisterClass(wc.lpszClassName, wc.hInstance);
+    app.cleanup_device();
+    window.destroy();
 
     return 0;
 }
@@ -276,11 +285,9 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_SIZE:
         if (app.device != NULL && wParam != SIZE_MINIMIZED)
         {
-            app.CleanupRenderTarget();
+            app.cleanup_render_target();
             app.swapChain->ResizeBuffers(0, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam), DXGI_FORMAT_UNKNOWN, 0);
-
-            SetWindowBlur(hWnd);
-            app.CreateRenderTarget();
+            app.create_render_target();
         }
         return 0;
     case WM_SYSCOMMAND:
