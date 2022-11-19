@@ -15,6 +15,7 @@ set(SOLIBVER ${MAJORVER}.${MINORVER}.${PATCHVER})
 
 # AStyle Source
 list(APPEND SRCS
+    # src/raminfo.cpp
     src/main.cpp
     src/imgui.cpp
     src/imgui_impl_dx11.cpp

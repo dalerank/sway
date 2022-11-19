@@ -3,6 +3,9 @@
 #include "imgui_impl_dx11.h"
 #include <d3d11.h>
 #include <tchar.h>
+#include <algorithm>
+#include <stdint.h>
+#include <vector>
 
 struct App {
   ID3D11Device *device = nullptr;
@@ -69,7 +72,7 @@ struct App {
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 struct Window {
   App &app;
-  HWND hwnd;
+  HWND hwnd = nullptr;
   WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, _T("wc.sway"), NULL };
 
   struct ACCENTPOLICY
@@ -152,10 +155,53 @@ struct Window {
     ::UnregisterClass(wc.lpszClassName, wc.hInstance);
   }
 
+  void create_imgui() {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplDX11_Init(app.device, app.context);
+  }
+
+  void new_frame() {
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+  }
+
   Window(App &a) : app(a) {
     
   }
 };
+
+struct FRAMInfo {
+  uint64_t UsagePercentage;
+  uint64_t TotalPhysicalMemory;
+  uint64_t FreePhysicalMemory;
+  uint64_t TotalPageFileSize;
+  uint64_t FreePageFileSize;
+  uint64_t TotalVirtualMemory;
+  uint64_t FreeVirtualMemory;
+  uint64_t ExtendedMemory;
+};
+
+FRAMInfo GetRAMInfo()
+{
+  MEMORYSTATUSEX statex;
+  statex.dwLength = sizeof(statex);
+  GlobalMemoryStatusEx(&statex);
+
+  FRAMInfo i;
+  i.UsagePercentage = (uint64_t)statex.dwMemoryLoad;
+  i.TotalPhysicalMemory = (uint64_t)statex.ullTotalPhys;
+  i.FreePhysicalMemory = (uint64_t)statex.ullAvailPhys;
+  i.TotalPageFileSize = (uint64_t)statex.ullTotalPageFile;
+  i.FreePageFileSize = (uint64_t)statex.ullAvailPageFile;
+  i.TotalVirtualMemory = (uint64_t)statex.ullTotalVirtual;
+  i.FreeVirtualMemory = (uint64_t)statex.ullAvailVirtual;
+  i.ExtendedMemory = (uint64_t)statex.ullAvailExtendedVirtual;
+  return i;
+}
 
 App app;
 int main(int, char**)
@@ -164,7 +210,6 @@ int main(int, char**)
 
     window.create();
 
-    // Initialize Direct3D
     if (!app.create_device(window.hwnd))
     {
         app.cleanup_device();
@@ -172,21 +217,11 @@ int main(int, char**)
         return 1;
     }
 
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    window.create_imgui();
 
-    ImGui::StyleColorsDark();
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplWin32_Init(window.hwnd);
-    ImGui_ImplDX11_Init(app.device, app.context);
-
-    // Our state
     ImVec4 clear_color = ImVec4(0.15f, 0.55f, 0.60f, 0.00f);
 
-    // Main loop
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
     bool done = false;
     while (!done)
     {
@@ -204,36 +239,63 @@ int main(int, char**)
             break;
 
         // Start the Dear ImGui frame
-        ImGui_ImplDX11_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
+        window.new_frame();
+
+        auto memload = [] (void *, int i) {
+          static std::vector<float> data;
+          static float last_info_update = 0;
+          if (data.size() < i+1) data.resize(i+1, 0.f);
+          if (last_info_update + 0.5f < ImGui::GetTime()) {
+            auto raminfo = GetRAMInfo();
+            data.erase(data.begin());
+            data.push_back(raminfo.UsagePercentage / 100.f);
+            last_info_update = ImGui::GetTime();
+          }
+          return data[i];
+        };
+        static int display_count = 70;
+        bool p_open = true;
+
+        ImGui::SetNextWindowPos(ImVec2{0, 0});
+        ImGui::SetNextWindowSize(ImVec2{140, 60});
+        ImGui::Begin("#a", &p_open, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
+        ImGui::PlotHistogram("", memload, NULL, display_count, 0, NULL, -1.0f, 1.0f, ImVec2(140, 100));
+        ImGui::PopStyleColor(1);
+        ImGui::SetCursorPos({10, 5});
+        ImGui::Text("RAM");
+        auto raminfo = GetRAMInfo();
+        ImGui::SetCursorPos({10, 20});
+        const float dwMBFactor = (float)(1024.f * 1024.f * 1024.f);
+        ImGui::Text("%0.1f/%0.1f Gb (%02u%%)", (raminfo.UsagePercentage / 100.f) * (raminfo.TotalPhysicalMemory / dwMBFactor), (raminfo.TotalPhysicalMemory / dwMBFactor), raminfo.UsagePercentage);
+        ImGui::End();
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
        // if (show_demo_window)
          //   ImGui::ShowDemoWindow(&show_demo_window);
 
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
-        {
-            static float f = 0.0f;
-            static int counter = 0;
-
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-           // ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-           // ImGui::Checkbox("Another Window", &show_another_window);
-
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-            ImGui::End();
-        }
+        //{
+        //    static float f = 0.0f;
+        //    static int counter = 0;
+        //
+        //    ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+        //
+        //    ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+        //   // ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+        //   // ImGui::Checkbox("Another Window", &show_another_window);
+        //
+        //    ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        //    ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+        //
+        //    if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+        //        counter++;
+        //    ImGui::SameLine();
+        //    ImGui::Text("counter = %d", counter);
+        //
+        //    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        //    ImGui::End();
+        //}
 
         // 3. Show another simple window.
         /*if (show_another_window)
