@@ -225,15 +225,20 @@ FRAMInfo GetRAMInfo()
 }
 
 App app;
+#ifdef DWIN_SUBSYSTEM_WINDOWS
 int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
+#else
+int main(int argc, char **argv)
+#endif
 {
     crashhandler::install();
     Logger::registerWriter(Logger::consolelog, "");
     Window window(app);
 
-    if (window.device_ok)
+    if (!window.device_ok)
         return 1;
 
+    Logger::info("device ok");
     js_vm_setup();
 
     bool done = false;

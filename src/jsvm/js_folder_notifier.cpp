@@ -5,28 +5,28 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
+#include <string>
 #include <thread>
+#include <vector>
+#include <filesystem>
 #include "common.h"
+#include "logger.hpp"
 
 #ifdef _WIN32
 #include <Windows.h>
 #endif
 
-#ifndef MAX_PATH
-#define MAX_PATH 256
-#endif
+
+namespace fs = std::filesystem;
 
 struct FileInfo {
-    char path[MAX_PATH];
+    std::string path;
     int hashtime;
 };
 
 static struct {
-    struct FileInfo files[MAX_PATH];
-    char dir[MAX_PATH];
+    std::vector<FileInfo> files;
+    std::string dir;
     std::thread thread;
     int finished;
 } notifier;
@@ -202,56 +202,62 @@ void js_vm_notifier_create_snapshot(const char *folder)
 {
     const char *js_path;
     struct tm ftime;
-    char filepath[MAX_PATH], abspath[MAX_PATH];
-    for (int i = 0; i < MAX_PATH; ++i) {
-        memset(notifier.files[i].path, 0, MAX_PATH);
+    notifier.files.clear();
+
+    std::vector<std::string> js_files;
+    fs::path path = fs::current_path()/"scripts";
+    if (!fs::exists(path)) {
+        Logger::error("Scripts directory not found");
+        return;
     }
 
-    const dir_listing *js_files = dir_find_files_with_extension(folder, "js");
+    for (const auto & entry : fs::directory_iterator(path)) {
+        if (entry.is_regular_file() && entry.path().extension() == "js")
+            js_files.push_back(entry.path().string());
+    }
 
-    for (int i = 0; i < js_files->num_files; ++i) {
-        js_path = js_files->files[i];
+    for (int i = 0; i < js_files.size(); ++i) {
+        js_path = js_files[i].c_str();
 
-        snprintf(filepath, MAX_PATH, "./scripts/%s", js_path);
-        js_vm_get_absolute_path(filepath, abspath, MAX_PATH);
-        get_time_modified(abspath, &ftime);
+        fs::path filepath = fs::current_path()/"scripts"/js_path;
+        get_time_modified(filepath.string().c_str(), &ftime);
 
-        notifier.files[i].hashtime = ftime.tm_hour * 1000 + ftime.tm_min * 100 + ftime.tm_sec;
-        strncpy(notifier.files[i].path, js_path, MAX_PATH);
+        FileInfo fi;
+        fi.hashtime = ftime.tm_hour * 1000 + ftime.tm_min * 100 + ftime.tm_sec;
+        fi.path = js_path;
+
+        notifier.files.push_back(fi);
     }
 }
 
 void js_vm_notifier_check_snapshot(void)
 {
-    const char *js_path;
-    char abspath[MAX_PATH], filepath[MAX_PATH];
     struct tm ftime;
 
-    for (int i = 0; i < MAX_PATH; ++i) {
-        js_path = notifier.files[i].path;
-        if (!*js_path) {
+    for (int i = 0; i < notifier.files.size(); ++i) {
+        const std::string &js_path = notifier.files[i].path;
+        if (!js_path.empty()) {
             return;
         }
 
-        snprintf(filepath, MAX_PATH, "./assets/scripts/%s", js_path);
-        js_vm_get_absolute_path(filepath, abspath, MAX_PATH);
-        get_time_modified(abspath, &ftime);
+        fs::path filepath = fs::current_path()/"scripts"/js_path;
+        get_time_modified(filepath.string().c_str(), &ftime);
 
         unsigned int newTime = ftime.tm_hour * 1000 + ftime.tm_min * 100 + ftime.tm_sec;
         unsigned int oldTime = notifier.files[i].hashtime;
         if( newTime != oldTime ) {
             notifier.files[i].hashtime = newTime;
-            snprintf(filepath, MAX_PATH, ":%s", js_path);
-            js_vm_reload_file(filepath);
+            std::string rpath = ":scripts/" + js_path;
+            js_vm_reload_file(rpath.c_str());
         }
     }
 }
 
-static int js_vm_notifier_watch_directory_thread(void *ptr)
+static int js_vm_notifier_watch_directory_thread()
 {
     int result;
     while (!notifier.finished) {
-        result = js_vm_notifier_watch_directory( notifier.dir );
+        result = js_vm_notifier_watch_directory( notifier.dir.c_str() );
         switch( result ) {
             case 0:
                 notifier.finished = 1;
@@ -267,7 +273,7 @@ static int js_vm_notifier_watch_directory_thread(void *ptr)
                 notifier.finished = 0;
                 break;
         }
-        std::this_thread::sleep_for(500);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
     return 0;
@@ -276,7 +282,7 @@ static int js_vm_notifier_watch_directory_thread(void *ptr)
 void js_vm_notifier_watch_directory_init(const char *dir)
 {
     write_log("start wtaching dir", dir, 0);
-    strncpy(notifier.dir, dir, MAX_PATH);
+    notifier.dir = dir;
     js_vm_notifier_create_snapshot(dir);
 
     notifier.thread = std::thread(js_vm_notifier_watch_directory_thread);

@@ -3,14 +3,12 @@
 #include "jsvm/js_constants.h"
 #include "jsvm/js_defines.h"
 #include "jsvm/js_folder_notifier.h"
-#include "jsvm/js_graphics.h"
-#include "jsvm/js_game.h"
-#include "jsvm/js_hotkey.h"
 #include "jsvm/js_ui.h"
-#include "jsvm/js_mouse.h"#include "mujs/mujs.h"
-#include "mujs/jsi.h"
-#include "mujs/jsvalue.h"
+#include "mujs.h"
+#include "jsi.h"
+//#include "jsvalue.h"
 #include "common.h"
+#include <filesystem>
 
 #define MAX_PATH 256
 #define MAX_FILES_RELOAD 255
@@ -56,6 +54,10 @@ int js_vm_trypcall(js_State *J, int params)
     return 1;
 }
 
+bool js_file_exists(const char *fn) {
+    return std::filesystem::exists(fn);
+}
+
 int js_vm_load_file_and_exec(const char *path)
 {
     char rpath[MAX_PATH];
@@ -66,7 +68,7 @@ int js_vm_load_file_and_exec(const char *path)
     if (*path == ':')
         snprintf(rpath, MAX_PATH, "%s/%s", ASSETS_SCRIPTS, path + 1);
 
-    if (!file_exists(rpath, 0)) {
+    if (!js_file_exists(rpath)) {
         write_log("!!! Cant find script at", rpath, 0);
         return 0;
     }
@@ -230,11 +232,11 @@ void js_reset_vm_state()
     js_atpanic(vm.J, js_game_panic);
 
     js_register_vm_functions(vm.J);
-    js_register_graphics_functions(vm.J);
-    js_register_game_functions(vm.J);
-    js_register_mouse_functions(vm.J);
-    js_register_hotkey_functions(vm.J);
-    js_register_game_constants(vm.J);
+    //js_register_graphics_functions(vm.J);
+    //js_register_game_functions(vm.J);
+    //js_register_mouse_functions(vm.J);
+    //js_register_hotkey_functions(vm.J);
+    //js_register_game_constants(vm.J);
     js_register_ui_functions(vm.J);
 
     int ok = js_vm_load_file_and_exec(":modules.js");
