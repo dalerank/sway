@@ -176,13 +176,7 @@ struct Window {
 
     SetWindowBlur(hwnd);
 
-    RECT screenRect;
-    BOOL fResult = SystemParametersInfo(SPI_GETWORKAREA, 0, &screenRect, 0);
-
-    int xPos = GetSystemMetrics(SM_CXSCREEN);
-    int yPos = screenRect.bottom - 60;
-
-    SetWindowPos(hwnd, HWND_TOPMOST, screenRect.left , yPos, (screenRect.right - screenRect.left), 60, 0);
+    update_window_pos();
 
     if (!app.create_device(hwnd)) {
       app.cleanup_device();
@@ -192,6 +186,22 @@ struct Window {
 
     device_ok = true;
     create_imgui();
+  }
+
+  void update_window_pos() {
+      RECT screenRect;
+      BOOL fResult = SystemParametersInfo(SPI_GETWORKAREA, 0, &screenRect, 0);
+
+      int app_window_height = js_get_option("app_window_height");
+      int app_window_width = js_get_option("app_window_width");
+      int app_window_ypos = js_get_option("app_window_ypos");
+      int app_window_xpos = js_get_option("app_window_xpos");
+      int xscreen = GetSystemMetrics(SM_CXSCREEN);
+      int xPos = app_window_xpos < 0 ? screenRect.left : app_window_xpos;
+      int yPos = app_window_ypos < 0 ? (screenRect.bottom - app_window_height) : app_window_ypos;
+      int width = app_window_width > 0 ? app_window_width : (screenRect.right - screenRect.left);
+
+      SetWindowPos(hwnd, HWND_TOPMOST, xPos, yPos, width, app_window_height, 0);
   }
 };
 
@@ -233,19 +243,20 @@ int main(int argc, char **argv)
 {
     crashhandler::install();
     Logger::registerWriter(Logger::consolelog, "");
-    Window window(app);
+    Logger::info("console logger registered");
 
+    js_vm_setup();
+
+    Window window(app);
     if (!window.device_ok)
         return 1;
 
     Logger::info("device ok");
-    js_vm_setup();
+    js_subscribe_callback(cb_on_change_scripts, [&] () { window.update_window_pos(); });
 
     bool done = false;
     while (!done)
     {
-        // Poll and handle messages (inputs, window resize, etc.)
-        // See the WndProc() function below for our to dispatch events to the Win32 backend.
         MSG msg;
         while (::PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE))
         {
@@ -290,6 +301,8 @@ int main(int argc, char **argv)
         ImGui::End();
 
         window.frame_end();
+
+        js_vm_sync();
     }
 
     // Cleanup

@@ -3,22 +3,31 @@
 #include "jsvm/js_constants.h"
 #include "jsvm/js_defines.h"
 #include "jsvm/js_folder_notifier.h"
+#include "jsvm/js_common.h"
 #include "jsvm/js_ui.h"
-#include "mujs.h"
-#include "jsi.h"
-//#include "jsvalue.h"
-#include "common.h"
+#include <stdarg.h>
 #include <filesystem>
+
+#include "mujs.h"
+#include "logger.hpp"
+#include "common.h"
 
 #define MAX_PATH 256
 #define MAX_FILES_RELOAD 255
-#define ASSETS_SCRIPTS "assets/scripts"
+#define ASSETS_SCRIPTS "scripts"
+
+struct js_callback {
+    js_callback_type type;
+    std::function<void()> func;
+};
+
 struct {
-    char files2load[MAX_FILES_RELOAD][MAX_PATH];
+    std::vector<std::string> files2load;
     int files2load_num;
     int have_error;
     char error_str[MAX_PATH];
     js_State *J;
+    std::vector<js_callback> callbacks;
 } vm;
 
 void js_reset_vm_state(void);
@@ -43,9 +52,9 @@ int js_vm_trypcall(js_State *J, int params)
             memcpy(vm.error_str, start_str, cur_symbol - start_str);
             start_str = cur_symbol + 1;
             cur_symbol += 2;
-            write_log("!!! pcall error ", vm.error_str);
+            Logger::error("!!! pcall error ", vm.error_str);
         }
-        write_log("!!! pcall error ", start_str);
+        Logger::error("!!! pcall error ", start_str);
         js_pop(J, 1);
         return 0;
     }
@@ -54,35 +63,32 @@ int js_vm_trypcall(js_State *J, int params)
     return 1;
 }
 
-bool js_file_exists(const char *fn) {
-    return std::filesystem::exists(fn);
-}
-
-int js_vm_load_file_and_exec(const char *path)
+int js_vm_load_file_and_exec(const std::string &path)
 {
-    char rpath[MAX_PATH];
     int error = 0;
-    if (!path)
+    if (path.empty())
         return 0;
 
-    if (*path == ':')
-        snprintf(rpath, MAX_PATH, "%s/%s", ASSETS_SCRIPTS, path + 1);
+    std::string rpath = path.front() == ':' 
+                    ? fmt::format("{}/{}", ASSETS_SCRIPTS, path.c_str() + 1)
+                    : path;
+        
 
-    if (!js_file_exists(rpath)) {
-        write_log("!!! Cant find script at", rpath, 0);
+    if (!std::filesystem::exists(rpath)) {
+        Logger::error("!!! Cant find script at {}", rpath);
         return 0;
     }
 
-    error = js_ploadfile(vm.J, rpath);
+    error = js_ploadfile(vm.J, rpath.c_str());
     if (error) {
-      write_log("!!! Error on open file ", js_tostring(vm.J, -1), 0);
+        Logger::error("!!! Error on open file {}", js_tostring(vm.J, -1));
         return 0;
     }
 
     js_getglobal(vm.J, "");
     int ok = js_vm_trypcall(vm.J, 0);
     if (!ok) {
-        write_log("Fatal error on call base after load ", path);
+        Logger::error("Fatal error on call base after load {}", path);
         return 0;
     }
     return 1;
@@ -98,23 +104,22 @@ void js_vm_sync()
     }
 
     if (vm.files2load_num > 0) {
-        for (int i = 0; i < vm.files2load_num; i++) {
-            write_log("JS: script reloaded ", vm.files2load[i]);
+        for (int i = 0; i < vm.files2load.size(); i++) {
+            Logger::error("JS: script reloaded {}", vm.files2load[i]);
             js_vm_load_file_and_exec(vm.files2load[i]);
         }
-
     }
 
-    for (int i = 0; i < MAX_FILES_RELOAD; ++i)
-        memset(vm.files2load[i], 0, MAX_PATH);
+    js_resolve_callback(cb_on_change_scripts);
 
+    vm.files2load.clear();
     vm.files2load_num = 0;
     vm.have_error = 0;
 }
 
 void js_vm_reload_file(const char *path)
 {
-    strncpy(vm.files2load[vm.files2load_num], path, MAX_PATH);
+    vm.files2load.push_back(path);
     vm.files2load_num++;
 }
 
@@ -122,14 +127,13 @@ int js_vm_exec_function_args(const char *funcname, const char *szTypes, ...)
 {
     if (vm.have_error)
         return 0;
+
     int i, ok, savetop;
     char msg[2] = { 0, 0 };
     va_list vl;
 
     if (vm.J == 0)
         return 1;
-
-    //log_info("script-if:// exec function ", funcname, 0);
 
     savetop = js_gettop(vm.J);
     js_getglobal(vm.J, funcname);
@@ -158,7 +162,7 @@ int js_vm_exec_function_args(const char *funcname, const char *szTypes, ...)
 
             default:
                 js_pushnull(vm.J);
-                write_log("!!! Undefined value for js.pcall engine_js_push when find ", "");
+                Logger::error("!!! Undefined value for js.pcall engine_js_push when find ");
                 break;
         }
     }
@@ -166,13 +170,13 @@ int js_vm_exec_function_args(const char *funcname, const char *szTypes, ...)
 
     ok = js_vm_trypcall(vm.J, (int)strlen(szTypes));
     if (!ok) {
-        write_log("Fatal error on call function ", funcname);
+        Logger::error("Fatal error on call function ", funcname);
         return 0;
     }
 
     js_pop(vm.J, 2);
     if( savetop - js_gettop(vm.J) != 0 ) {
-        write_log( "STACK grow for ", funcname);
+        Logger::error( "STACK grow for {}", funcname);
     }
     return ok;
 }
@@ -186,30 +190,39 @@ void js_vm_load_module(js_State *J)
 {
     const char *scriptName = js_tostring(J, 1);
 
-    strncpy(vm.files2load[vm.files2load_num], scriptName, MAX_PATH - 1);
+    vm.files2load.push_back(scriptName);
     vm.files2load_num++;
 }
 
-int js_vm_get_absolute_path(const char *path, char *rpath, int max_path)
+std::string js_vm_get_absolute_path(const char *path)
 {
 #if defined(_WIN32)
+    char rpath[MAX_PATH] = {0};
     char *p = _fullpath(rpath, path, _MAX_PATH);
 #elif defined(__linux__) || defined(__macosx__)
     realpath(path, rpath);
 #endif
 
-    for (int i = 0; rpath != 0 && i < max_path; ++i)
+    for (int i = 0; rpath != 0 && i < MAX_PATH; ++i)
         if (rpath[i] == '\\')
             rpath[i] = '/';
 
-    return 0;
+    return rpath;
 }
 
 void js_game_panic(js_State *J)
 {
-    write_log("JSE !!! Uncaught exception: ", js_tostring(J, -1));
+    Logger::error("JSE !!! Uncaught exception: {}", js_tostring(J, -1));
 }
 
+int js_get_option(const char *name)
+{
+    js_getglobal(vm.J, name);
+    int result = js_tonumber(vm.J, -1);
+    js_pop(vm.J, 1);
+
+    return result;
+}
 
 void js_register_vm_functions(js_State *J)
 {
@@ -223,8 +236,7 @@ void js_reset_vm_state()
         vm.J = NULL;
     }
 
-    for (int i = 0; i < MAX_FILES_RELOAD; ++i)
-        memset(vm.files2load[i], 0, MAX_PATH);
+    vm.files2load.clear();
     vm.files2load_num = 0;
     vm.have_error = 0;
 
@@ -233,20 +245,29 @@ void js_reset_vm_state()
 
     js_register_vm_functions(vm.J);
     //js_register_graphics_functions(vm.J);
-    //js_register_game_functions(vm.J);
+    js_register_common_functions(vm.J);
     //js_register_mouse_functions(vm.J);
     //js_register_hotkey_functions(vm.J);
     //js_register_game_constants(vm.J);
     js_register_ui_functions(vm.J);
 
-    int ok = js_vm_load_file_and_exec(":modules.js");
-    if (ok)
-        js_pop(vm.J, 2); //restore stack after call js-function
-    //write_log( "STACK state ", 0, js_gettop(vm.J));
-}
+    {
+        int ok = js_vm_load_file_and_exec(":config.js");
+        if (ok) {
+            Logger::info("Loaded config");
+            js_pop(vm.J, 2); //restore stack after call js-function
+        }
+    }
 
-const char *js_vm_scripts_folder(void) {
-    return ASSETS_SCRIPTS;
+    {
+        int ok = js_vm_load_file_and_exec(":modules.js");
+        if (ok) {
+            Logger::info("Loaded modules");
+            js_pop(vm.J, 2); //restore stack after call js-function
+        }
+    }
+
+    //write_log( "STACK state ", 0, js_gettop(vm.J));
 }
 
 void js_vm_setup(void)
@@ -254,8 +275,19 @@ void js_vm_setup(void)
     vm.J = NULL;
     js_reset_vm_state();
 
-    char abspath[MAX_PATH];
-    js_vm_get_absolute_path(ASSETS_SCRIPTS, abspath, MAX_PATH);
+    std::string abspath = js_vm_get_absolute_path(ASSETS_SCRIPTS);
 
     js_vm_notifier_watch_directory_init(abspath);
+}
+
+void js_subscribe_callback(js_callback_type cb_type, std::function<void()> callback) {
+    vm.callbacks.push_back({cb_type, callback});
+}
+
+void js_resolve_callback(js_callback_type cb_type) {
+    for (auto &cb: vm.callbacks) {
+        if (cb.type == cb_type && !!cb.func) {
+            cb.func();
+        }
+    }
 }

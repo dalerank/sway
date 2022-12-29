@@ -20,7 +20,6 @@ file(GLOB JSVM_SOURCES_LIST ${BASE_SOURCE_DIR}/jsvm/*.cpp)
 list(APPEND SRCS
     # src/raminfo.cpp
     src/main.cpp
-    src/log.cpp
     src/imgui.cpp
     src/imgui_impl_dx11.cpp
     src/imgui_impl_win32.cpp

@@ -47,7 +47,7 @@ int js_vm_notifier_watch_directory(const char *lpDir)
                              FILE_NOTIFY_CHANGE_SIZE); // watch file modify
 
     if (dwChangeHandles[0] == INVALID_HANDLE_VALUE) {
-        write_log("FindFirstChangeNotification function failed er=", 0, GetLastError());
+        Logger::error("FindFirstChangeNotification function failed er={}", GetLastError());
         return 0;
     }
 
@@ -58,14 +58,14 @@ int js_vm_notifier_watch_directory(const char *lpDir)
                              FILE_NOTIFY_CHANGE_LAST_WRITE);  // watch file size change
 
     if (dwChangeHandles[1] == INVALID_HANDLE_VALUE) {
-        write_log("FindFirstChangeNotification function failed er=", 0, GetLastError());
+        Logger::error("FindFirstChangeNotification function failed er= {}", GetLastError());
         return 0;
     }
 
 
     // Make a final validation check on our handles.
     if ((dwChangeHandles[0] == NULL) || (dwChangeHandles[1] == NULL)) {
-        write_log("Unexpected NULL from FindFirstChangeNotification er=", 0, GetLastError());
+        Logger::error("Unexpected NULL from FindFirstChangeNotification er= {}", GetLastError());
         return 0;
     }
 
@@ -74,7 +74,7 @@ int js_vm_notifier_watch_directory(const char *lpDir)
     while (1) {
         // Wait for notification.
 
-        write_log("Waiting for notification...", 0, 0);
+        Logger::error("Waiting for notification...");
 
         dwWaitStatus = WaitForMultipleObjects(2, dwChangeHandles, FALSE, INFINITE);
 
@@ -85,7 +85,7 @@ int js_vm_notifier_watch_directory(const char *lpDir)
                 // Refresh this directory and restart the notification.
 
                 if ( FindNextChangeNotification(dwChangeHandles[0]) == FALSE ) {
-                    write_log("FindNextChangeNotification function failed er=", 0, GetLastError());
+                    Logger::error("FindNextChangeNotification function failed er={}", GetLastError());
                     return 0;
                 }
                 return 2;
@@ -97,7 +97,7 @@ int js_vm_notifier_watch_directory(const char *lpDir)
                 // Refresh the tree and restart the notification.
 
                 if (FindNextChangeNotification(dwChangeHandles[1]) == FALSE ) {
-                    write_log("FindNextChangeNotification function failed er=", 0, GetLastError());
+                    Logger::error("FindNextChangeNotification function failed er={}", GetLastError());
                     return 0;
                 }
                 return 3;
@@ -110,11 +110,11 @@ int js_vm_notifier_watch_directory(const char *lpDir)
                 // In a single-threaded environment you might not want an
                 // INFINITE wait.
 
-                write_log("No changes in the timeout period.", 0, 0);
+                Logger::error("No changes in the timeout period.");
                 break;
 
             default:
-                 write_log("Unhandled dwWaitStatus.", 0, 0);
+                Logger::error("Unhandled dwWaitStatus.");
                 return 0;
         }
     }
@@ -138,7 +138,7 @@ int js_vm_notifier_watch_directory(const char *lpDir)
     fd = inotify_init();
 
     if ( fd < 0 ) {
-        log_info( "WARNING !!! Cant init inotify for ", lpDir, 0);
+        Logger::error( "WARNING !!! Cant init inotify for {}", lpDir);
         return 0;
     }
 
@@ -146,7 +146,7 @@ int js_vm_notifier_watch_directory(const char *lpDir)
     length = read( fd, buffer, BUF_LEN );
 
     if ( length < 0 ) {
-        log_info( "WARNING !!! Cant read inotify event ", lpDir, 0);
+        Logger::error( "WARNING !!! Cant read inotify event {}", lpDir);
         return 0;
     }
 
@@ -156,9 +156,9 @@ int js_vm_notifier_watch_directory(const char *lpDir)
         if ( event->len ) {
             if ( event->mask & IN_MODIFY ) {
                 if ( event->mask & IN_ISDIR ) {
-                    log_info( "WARNING !!! The directory was modified", event->name, 0 );
+                    Logger::error( "WARNING !!! The directory was modified {}", event->name);
                 } else {
-                    log_info( "WARNING !!! The file was modified", event->name, 0 );
+                    Logger::error( "WARNING !!! The file was modified {}", event->name);
                     result = 2;
                     break;
                 }
@@ -198,9 +198,9 @@ static int get_time_modified(const char *path, struct tm *ftime)
     return 0;
 }
 
-void js_vm_notifier_create_snapshot(const char *folder)
+void js_vm_notifier_create_snapshot(const std::string &folder)
 {
-    const char *js_path;
+    
     struct tm ftime;
     notifier.files.clear();
 
@@ -212,15 +212,14 @@ void js_vm_notifier_create_snapshot(const char *folder)
     }
 
     for (const auto & entry : fs::directory_iterator(path)) {
-        if (entry.is_regular_file() && entry.path().extension() == "js")
+        if (entry.is_regular_file() && entry.path().extension() == ".js")
             js_files.push_back(entry.path().string());
     }
 
     for (int i = 0; i < js_files.size(); ++i) {
-        js_path = js_files[i].c_str();
+        const char *js_path = js_files[i].c_str();
 
-        fs::path filepath = fs::current_path()/"scripts"/js_path;
-        get_time_modified(filepath.string().c_str(), &ftime);
+        get_time_modified(js_path, &ftime);
 
         FileInfo fi;
         fi.hashtime = ftime.tm_hour * 1000 + ftime.tm_min * 100 + ftime.tm_sec;
@@ -236,19 +235,17 @@ void js_vm_notifier_check_snapshot(void)
 
     for (int i = 0; i < notifier.files.size(); ++i) {
         const std::string &js_path = notifier.files[i].path;
-        if (!js_path.empty()) {
-            return;
+        if (js_path.empty()) {
+            continue;
         }
 
-        fs::path filepath = fs::current_path()/"scripts"/js_path;
-        get_time_modified(filepath.string().c_str(), &ftime);
+        get_time_modified(js_path.c_str(), &ftime);
 
         unsigned int newTime = ftime.tm_hour * 1000 + ftime.tm_min * 100 + ftime.tm_sec;
         unsigned int oldTime = notifier.files[i].hashtime;
         if( newTime != oldTime ) {
             notifier.files[i].hashtime = newTime;
-            std::string rpath = ":scripts/" + js_path;
-            js_vm_reload_file(rpath.c_str());
+            js_vm_reload_file(js_path.c_str());
         }
     }
 }
@@ -279,9 +276,10 @@ static int js_vm_notifier_watch_directory_thread()
     return 0;
 }
 
-void js_vm_notifier_watch_directory_init(const char *dir)
+void js_vm_notifier_watch_directory_init(const std::string &dir)
 {
-    write_log("start wtaching dir", dir, 0);
+    Logger::info("start wtaching dir {}", dir);
+
     notifier.dir = dir;
     js_vm_notifier_create_snapshot(dir);
 
