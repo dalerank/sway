@@ -14,29 +14,27 @@ set(PATCHVER 0)
 set(SOLCONSOLE_ENABLED 0)
 set(SOLIBVER ${MAJORVER}.${MINORVER}.${PATCHVER})
 
+file(GLOB SOURCES_LIST ${BASE_SOURCE_DIR}/*.cpp)
 file(GLOB JSVM_SOURCES_LIST ${BASE_SOURCE_DIR}/jsvm/*.cpp)
+file(GLOB UI_SOURCES_LIST ${BASE_SOURCE_DIR}/ui/*.cpp)
+file(GLOB MODULES_SOURCES_LIST ${BASE_SOURCE_DIR}/modules/*.cpp)
 
 # AStyle Source
 list(APPEND SRCS
     # src/raminfo.cpp
-    src/main.cpp
-    src/imgui.cpp
-    src/imgui_impl_dx11.cpp
-    src/imgui_impl_win32.cpp
-    src/imgui_tables.cpp
-    src/imgui_widgets.cpp
-    src/imgui_draw.cpp
-    src/stack_trace.cpp
-    src/osystem.cpp
-    src/logger.cpp
-    src/format.cpp
+    ${SOURCES_LIST}
     ${JSVM_SOURCES_LIST}
+    ${UI_SOURCES_LIST}
+    ${MODULES_SOURCES_LIST}
     )
 
 message("CMAKE_BUILD_TYPE is Executable ${CMAKE_BUILD_TYPE}")
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 source_group("jsvm" FILES ${JSVM_SOURCES_LIST})
+source_group("ui" FILES ${UI_SOURCES_LIST})
+source_group("src" FILES ${SOURCES_LIST})
+source_group("modules" FILES ${MODULES_SOURCES_LIST})
 
 include_directories(src)
 include_directories(${CMAKE_SOURCE_DIR}/mujs)
