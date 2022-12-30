@@ -11,9 +11,16 @@ namespace modules {
 
         bool process_modules(const char* argv[], int argc)     {
             for (ModuleLinkedList* s = ModuleLinkedList::tail; s; s = s->next)
-                s->func(argv, argc);
+                s->proc_cb(argv, argc);
 
-            return false;
+            return true;
+        }
+
+        bool reg_modules(const char* argv[], int argc)     {
+            for (ModuleLinkedList* s = ModuleLinkedList::tail; s; s = s->next)
+                s->reg_cb(argv, argc);
+
+            return true;
         }
     };
 
@@ -21,5 +28,9 @@ namespace modules {
 
     void process_modules(const char* argv[], int argc) {
         module_processor.process_modules(argv, argc);
+    }
+
+    void register_modules(const char* argv[], int argc) {
+        module_processor.reg_modules(argv, argc);
     }
 }
