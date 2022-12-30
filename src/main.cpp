@@ -252,7 +252,7 @@ int main(int argc, char **argv)
         return 1;
 
     Logger::info("device ok");
-    js_subscribe_callback(cb_on_change_scripts, [&] () { window.update_window_pos(); });
+    js_subscribe_native_callback(cb_on_change_scripts, [&] () { window.update_window_pos(); });
 
     bool done = false;
     while (!done)
@@ -302,7 +302,7 @@ int main(int argc, char **argv)
 
         window.frame_end();
 
-        js_vm_sync();
+        js_vm_sync((int)ImGui::GetTime() * 1000);
     }
 
     // Cleanup

@@ -7,5 +7,5 @@ var modules = [
 
 for (var i in modules) {
     log("Loading module " + modules[i])
-    load_js_module(modules[i])
+    load_module(modules[i])
 }

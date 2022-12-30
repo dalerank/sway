@@ -16,9 +16,16 @@
 #define MAX_FILES_RELOAD 255
 #define ASSETS_SCRIPTS "scripts"
 
-struct js_callback {
-    js_callback_type type;
+struct native_callback {
+    native_callback_type type;
     std::function<void()> func;
+};
+
+struct js_callback {
+    const char* info = "";
+    unsigned interval = 0;
+    unsigned last_call_time = 0;
+    const char *handle = nullptr;
 };
 
 struct {
@@ -27,10 +34,9 @@ struct {
     int have_error;
     char error_str[MAX_PATH];
     js_State *J;
-    std::vector<js_callback> callbacks;
+    std::vector<native_callback> native_callbacks;
+    std::vector<js_callback> js_callbacks;
 } vm;
-
-void js_reset_vm_state(void);
 
 int js_vm_trypcall(js_State *J, int params)
 {
@@ -72,7 +78,6 @@ int js_vm_load_file_and_exec(const std::string &path)
     std::string rpath = path.front() == ':' 
                     ? fmt::format("{}/{}", ASSETS_SCRIPTS, path.c_str() + 1)
                     : path;
-        
 
     if (!std::filesystem::exists(rpath)) {
         Logger::error("!!! Cant find script at {}", rpath);
@@ -94,13 +99,15 @@ int js_vm_load_file_and_exec(const std::string &path)
     return 1;
 }
 
-void js_vm_sync()
+void js_vm_sync(int time)
 {
+    js_vm_resolve_callbacks(time);
+
     if (!vm.files2load_num)
         return;
 
     if (vm.have_error) {
-        js_reset_vm_state();
+        js_vm_reset_state();
     }
 
     if (vm.files2load_num > 0) {
@@ -110,7 +117,7 @@ void js_vm_sync()
         }
     }
 
-    js_resolve_callback(cb_on_change_scripts);
+    js_resolve_native_callback(cb_on_change_scripts);
 
     vm.files2load.clear();
     vm.files2load_num = 0;
@@ -194,6 +201,37 @@ void js_vm_load_module(js_State *J)
     vm.files2load_num++;
 }
 
+void js_vm_subscribe_on_update(js_State *J)
+{
+    //    js_unref(J, handle); /* delete old function */
+    js_callback cb;
+    
+    cb.info = js_tostring(J, 1);
+    cb.interval = js_tointeger(J, 2);
+
+    js_copy(J, 3);
+    cb.handle = js_ref(J); /* stow the js function in the registry */
+    vm.js_callbacks.push_back(cb);
+}
+
+void js_vm_resolve_callbacks(int time)
+{
+    for (auto& cb : vm.js_callbacks) {
+        if (time - cb.last_call_time < cb.interval)
+            continue;
+
+        cb.last_call_time = time;
+        js_getregistry(vm.J, cb.handle); /* retrieve the js function from the registry */
+        js_pushnull(vm.J);
+        int error = js_pcall(vm.J, 0);
+        if (error) {
+            std::string str = js_tostring(vm.J, -1);
+            Logger::warning(str);
+        }
+        js_pop(vm.J, 1);
+    }
+}
+
 std::string js_vm_get_absolute_path(const char *path)
 {
 #if defined(_WIN32)
@@ -226,10 +264,11 @@ int js_get_option(const char *name)
 
 void js_register_vm_functions(js_State *J)
 {
-    REGISTER_GLOBAL_FUNCTION(J, js_vm_load_module, "load_js_module", 1);
+    REGISTER_GLOBAL_FUNCTION(J, js_vm_load_module, "load_module", 1);
+    REGISTER_GLOBAL_FUNCTION(J, js_vm_subscribe_on_update, "subscribe_on_update", 2);
 }
 
-void js_reset_vm_state()
+void js_vm_reset_state()
 {
     if (vm.J) {
         js_freestate(vm.J);
@@ -273,19 +312,19 @@ void js_reset_vm_state()
 void js_vm_setup(void)
 {
     vm.J = NULL;
-    js_reset_vm_state();
+    js_vm_reset_state();
 
     std::string abspath = js_vm_get_absolute_path(ASSETS_SCRIPTS);
 
     js_vm_notifier_watch_directory_init(abspath);
 }
 
-void js_subscribe_callback(js_callback_type cb_type, std::function<void()> callback) {
-    vm.callbacks.push_back({cb_type, callback});
+void js_subscribe_native_callback(native_callback_type cb_type, std::function<void()> callback) {
+    vm.native_callbacks.push_back({cb_type, callback});
 }
 
-void js_resolve_callback(js_callback_type cb_type) {
-    for (auto &cb: vm.callbacks) {
+void js_resolve_native_callback(native_callback_type cb_type) {
+    for (auto &cb: vm.native_callbacks) {
         if (cb.type == cb_type && !!cb.func) {
             cb.func();
         }
