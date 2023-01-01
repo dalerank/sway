@@ -246,6 +246,7 @@ int main(int argc, char **argv)
         window.frame_begin();
 
         modules::process_modules(nullptr, 0);
+        js_vm_resolve_frame_callbacks();
 
         window.frame_end();
 

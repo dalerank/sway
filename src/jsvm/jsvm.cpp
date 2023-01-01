@@ -21,10 +21,15 @@ struct native_callback {
     std::function<void()> func;
 };
 
-struct js_callback {
+struct js_update_callback {
     const char* info = "";
     unsigned interval = 0;
     unsigned last_call_time = 0;
+    const char *handle = nullptr;
+};
+
+struct js_frame_callback {
+    const char* info = "";
     const char *handle = nullptr;
 };
 
@@ -35,7 +40,8 @@ struct {
     char error_str[MAX_PATH];
     js_State *J;
     std::vector<native_callback> native_callbacks;
-    std::vector<js_callback> js_callbacks;
+    std::vector<js_update_callback> js_update_callbacks;
+    std::vector<js_frame_callback> js_frame_callbacks;
 } vm;
 
 int js_vm_trypcall(js_State *J, int params)
@@ -99,12 +105,28 @@ int js_vm_load_file_and_exec(const std::string &path)
     return 1;
 }
 
+void js_vm_clear_callbacks()
+{
+    for (auto& cb : vm.js_frame_callbacks) {
+        js_unref(vm.J, cb.handle);
+    }
+    vm.js_frame_callbacks.clear();
+
+    for (auto& cb : vm.js_update_callbacks) {
+        js_unref(vm.J, cb.handle);
+    }
+    vm.js_update_callbacks.clear();
+}
+
+
 void js_vm_sync(int time)
 {
-    js_vm_resolve_callbacks(time);
+    js_vm_resolve_update_callbacks(time);
 
     if (!vm.files2load_num)
         return;
+
+    js_vm_clear_callbacks();
 
     if (vm.have_error) {
         js_vm_reset_state();
@@ -204,19 +226,45 @@ void js_vm_load_module(js_State *J)
 void js_vm_subscribe_on_update(js_State *J)
 {
     //    js_unref(J, handle); /* delete old function */
-    js_callback cb;
+    js_update_callback cb;
     
     cb.info = js_tostring(J, 1);
     cb.interval = js_tointeger(J, 2);
 
     js_copy(J, 3);
     cb.handle = js_ref(J); /* stow the js function in the registry */
-    vm.js_callbacks.push_back(cb);
+    vm.js_update_callbacks.push_back(cb);
 }
 
-void js_vm_resolve_callbacks(int time)
+void js_vm_subscribe_on_frame(js_State *J)
 {
-    for (auto& cb : vm.js_callbacks) {
+    //    js_unref(J, handle); /* delete old function */
+    js_frame_callback cb;
+
+    cb.info = js_tostring(J, 1);
+
+    js_copy(J, 2);
+    cb.handle = js_ref(J); /* stow the js function in the registry */
+    vm.js_frame_callbacks.push_back(cb);
+}
+
+void js_vm_resolve_frame_callbacks()
+{
+    for (auto& cb : vm.js_frame_callbacks) {
+        js_getregistry(vm.J, cb.handle); /* retrieve the js function from the registry */
+        js_pushnull(vm.J);
+        int error = js_pcall(vm.J, 0);
+        if (error) {
+            std::string str = js_tostring(vm.J, -1);
+            Logger::warning(str);
+        }
+        js_pop(vm.J, 1);
+    }
+}
+
+void js_vm_resolve_update_callbacks(int time)
+{
+    for (auto& cb : vm.js_update_callbacks) {
         if (time - cb.last_call_time < cb.interval)
             continue;
 
@@ -262,10 +310,13 @@ int js_get_option(const char *name)
     return result;
 }
 
+js_State *js_vm_instance() { return vm.J; }
+
 void js_register_vm_functions(js_State *J)
 {
     REGISTER_GLOBAL_FUNCTION(J, js_vm_load_module, "load_module", 1);
     REGISTER_GLOBAL_FUNCTION(J, js_vm_subscribe_on_update, "subscribe_on_update", 2);
+    REGISTER_GLOBAL_FUNCTION(J, js_vm_subscribe_on_frame, "subscribe_on_frame", 2);
 }
 
 void js_vm_reset_state()
@@ -283,7 +334,7 @@ void js_vm_reset_state()
     js_atpanic(vm.J, js_game_panic);
 
     js_register_vm_functions(vm.J);
-    //js_register_graphics_functions(vm.J);
+    js_register_constants(vm.J);
     js_register_common_functions(vm.J);
     //js_register_mouse_functions(vm.J);
     //js_register_hotkey_functions(vm.J);
