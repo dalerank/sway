@@ -4,7 +4,7 @@ var ModuleRam = {
 	data : [],
 	state : null,
 	datalen : 70,
-	window_width : 120
+	wsize : {x:80, y:g_config.window_height}
 }
 
 ModuleRam.init = function() {
@@ -26,10 +26,11 @@ ModuleRam.on_frame_ram_info = function() {
 		return
 
   //ui.SetNextWindowPos({x:0, y:0})
-  ui.SetNextWindowSize({x:ModuleRam.window_width, y:g_config.window_height})
+  var wsize = _sscale(ModuleRam.wsize)
+  ui.SetNextWindowSize(wsize)
   ui.Begin("#a", true, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize)
   ui.PushStyleColor(ImGuiCol_FrameBg, {a:0, r:0, g:0, b:0})
-  ui.PlotHistogram("", ModuleRam.data, 0, "", -1.0, 1.0, {x:ModuleRam.window_width, y:g_config.window_height})
+  ui.PlotHistogram("", ModuleRam.data, 0, "", -1.0, 1.0, wsize)
   ui.PopStyleColor(1)
   ui.SetCursorPos({x:10, y:5})
   ui.Text("RAM")

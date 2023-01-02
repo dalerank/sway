@@ -313,6 +313,15 @@ int js_get_option(const char *name)
     return result;
 }
 
+void js_set_option(const char *name, double number) {
+    js_getglobal(vm.J, "g_config");
+    int result = 0;
+    if (js_isobject(vm.J, 0)) {
+        js_pushnumber(vm.J, number);
+        js_setproperty(vm.J, -2, name);
+    }
+}
+
 js_State *js_vm_instance() { return vm.J; }
 
 void js_register_vm_functions(js_State *J)

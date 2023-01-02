@@ -20,5 +20,11 @@ var g_config = {
 	window_width : -1,
 	window_ypos : -64,
 	window_xpos : 0,
+	window_xscale : 1,
+	window_yscale : 1,
 	modules : {},
 }
+
+function _xpos(x) { return x * g_config.window_xscale; }
+function _ypos(y) { return y * g_config.window_yscale; }
+function _sscale(p) { return {x:_xpos(p.x), y:_ypos(p.y)}}

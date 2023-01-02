@@ -13,6 +13,7 @@ int js_vm_exec_function_args(const char *funcname, const char *szTypes, ...);
 int js_vm_exec_function(const char *funcname);
 void js_vm_reload_file(const char *path);
 int js_get_option(const char* name);
+void js_set_option(const char* name, double number);
 struct js_State *js_vm_instance();
 
 void js_subscribe_native_callback(native_callback_type cb_type, std::function<void()> callback);
