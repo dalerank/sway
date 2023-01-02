@@ -63,9 +63,9 @@ static void js_raminfo_get(js_State *J) {
 static bool raminfo_reg(const char *argv[], int argc)
 {
     auto J = js_vm_instance();
-    DEF_GLOBAL_OBJECT(J, raminfo)
+    DEF_GLOBAL_OBJECT(J, hw_ram)
         REGISTER_FUNCTION(J, js_raminfo_get, "get", 0);
-    REGISTER_GLOBAL_OBJECT(J, raminfo)
+    REGISTER_GLOBAL_OBJECT(J, hw_ram)
     return true;
 }
 

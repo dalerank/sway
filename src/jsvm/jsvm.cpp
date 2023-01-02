@@ -303,10 +303,13 @@ void js_game_panic(js_State *J)
 
 int js_get_option(const char *name)
 {
-    js_getglobal(vm.J, name);
-    int result = js_tonumber(vm.J, -1);
+    js_getglobal(vm.J, "g_config");
+    int result = 0;
+    if (js_isobject(vm.J, 0)) {
+        js_getproperty(vm.J, 0, name); result = js_tonumber(vm.J, -1);
+    }
+    
     js_pop(vm.J, 1);
-
     return result;
 }
 
@@ -348,6 +351,7 @@ void js_vm_reset_state()
             js_pop(vm.J, 2); //restore stack after call js-function
         }
     }
+
 
     {
         int ok = js_vm_load_file_and_exec(":modules.js");

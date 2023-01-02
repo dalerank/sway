@@ -193,10 +193,10 @@ struct Window {
       RECT screenRect;
       BOOL fResult = SystemParametersInfo(SPI_GETWORKAREA, 0, &screenRect, 0);
 
-      int app_window_height = js_get_option("app_window_height");
-      int app_window_width = js_get_option("app_window_width");
-      int app_window_ypos = js_get_option("app_window_ypos");
-      int app_window_xpos = js_get_option("app_window_xpos");
+      int app_window_height = js_get_option("window_height");
+      int app_window_width = js_get_option("window_width");
+      int app_window_ypos = js_get_option("window_ypos");
+      int app_window_xpos = js_get_option("window_xpos");
       int xscreen = GetSystemMetrics(SM_CXSCREEN);
       int xPos = app_window_xpos < 0 ? screenRect.left : app_window_xpos;
       int yPos = app_window_ypos < 0 ? (screenRect.bottom - app_window_height) : app_window_ypos;
