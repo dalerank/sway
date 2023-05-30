@@ -237,6 +237,7 @@ struct Window {
       SetWindowPos(hwnd, HWND_TOPMOST, xPos, yPos, width, app_window_height, 0);
       double ws, hs;
       GetDisplayScale(ws, hs);
+
       js_set_option("window_xscale", ws);
       js_set_option("window_yscale", ws);
   }

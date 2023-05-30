@@ -200,7 +200,7 @@ static int get_time_modified(const char *path, struct tm *ftime)
 
 void js_vm_notifier_create_snapshot(const std::string &folder)
 {
-    
+
     struct tm ftime;
     notifier.files.clear();
 

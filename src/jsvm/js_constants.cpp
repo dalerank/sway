@@ -22,27 +22,27 @@ void js_register_constants(js_State *J)
     REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoBringToFrontOnFocus  );
     REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_AlwaysVerticalScrollbar);
     REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_AlwaysHorizontalScrollbar);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_AlwaysUseWindowPadding ); 
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoNavInputs            ); 
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoNavFocus             ); 
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_UnsavedDocument        ); 
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoNav                  ); 
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoDecoration           ); 
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoInputs               ); 
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_AlwaysUseWindowPadding );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoNavInputs            );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoNavFocus             );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_UnsavedDocument        );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoNav                  );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoDecoration           );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiWindowFlags_NoInputs               );
 
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_Text);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_TextDisabled);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_WindowBg);              // Background of normal windows
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_ChildBg);               // Background of child windows
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_PopupBg);               // Background of popups, menus, tooltips windows
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_Border);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_BorderShadow);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_FrameBg);               // Background of checkbox, radio button, plot, slider, text input
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_FrameBgHovered);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_FrameBgActive);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_TitleBg);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_TitleBgActive);
-    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_TitleBgCollapsed);
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_Text                           );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_TextDisabled                   );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_WindowBg                       );  // Background of normal windows
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_ChildBg                        );  // Background of child windows
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_PopupBg                        );  // Background of popups, menus, tooltips windows
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_Border                         );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_BorderShadow                   );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_FrameBg                        );  // Background of checkbox, radio button, plot, slider, text input
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_FrameBgHovered                 );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_FrameBgActive                  );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_TitleBg                        );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_TitleBgActive                  );
+    REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_TitleBgCollapsed               );
     REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_MenuBarBg);
     REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_ScrollbarBg);
     REGISTER_GLOBAL_CONSTANT(J, ImGuiCol_ScrollbarGrab);

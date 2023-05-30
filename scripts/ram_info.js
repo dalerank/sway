@@ -4,7 +4,7 @@ var ModuleRam = {
 	data : [],
 	state : null,
 	datalen : 70,
-	wsize : {x:80, y:g_config.window_height}
+	wsize : {x:90, y:g_config.window_height}
 }
 
 ModuleRam.init = function() {
